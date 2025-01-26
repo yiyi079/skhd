@@ -31,6 +31,11 @@ static const char *literal_keycode_str[] =
     "brightness_down", "illumination_up", "illumination_down"
 };
 
+static const char *literal_mousebutton_str[] =
+{
+    "mouse_left", "mouse_right", "mouse_middle"
+};
+
 enum token_type
 {
     Token_Identifier,
@@ -41,6 +46,9 @@ enum token_type
     Token_Literal,
     Token_Key_Hex,
     Token_Key,
+
+    Token_Mouse_Literal,
+    Token_Mouse_Hex,
 
     Token_Decl,
     Token_Comma,

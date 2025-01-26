@@ -137,6 +137,17 @@ parse_key_hex(struct parser *parser)
     char *hex = copy_string_count(key.text, key.length);
     uint32_t keycode = keycode_from_hex(hex);
     free(hex);
+    debug("\tmouse: '%.*s' (0x%02x)\n", key.length, key.text, keycode);
+    return keycode;
+}
+
+static uint32_t
+parse_mouse_hex(struct parser *parser)
+{
+    struct token key = parser_previous(parser);
+    char *hex = copy_string_count(key.text, key.length);
+    uint32_t keycode = keycode_from_hex(hex);
+    free(hex);
     debug("\tkey: '%.*s' (0x%02x)\n", key.length, key.text, keycode);
     return keycode;
 }
@@ -173,6 +184,7 @@ static uint32_t literal_keycode_value[] =
     NX_KEYTYPE_REWIND,          NX_KEYTYPE_FAST,            NX_KEYTYPE_BRIGHTNESS_UP,
     NX_KEYTYPE_BRIGHTNESS_DOWN, NX_KEYTYPE_ILLUMINATION_UP, NX_KEYTYPE_ILLUMINATION_DOWN
 };
+static uint32_t literal_mousebutton_value[] = { 0, 1, 2 };
 
 static inline void
 handle_implicit_literal_flags(struct hotkey *hotkey, int literal_index)
@@ -194,6 +206,20 @@ parse_key_literal(struct parser *parser, struct hotkey *hotkey)
             handle_implicit_literal_flags(hotkey, i);
             hotkey->key = literal_keycode_value[i];
             debug("\tkey: '%.*s' (0x%02x)\n", key.length, key.text, hotkey->key);
+            break;
+        }
+    }
+}
+
+static void
+parse_mouse_literal(struct parser *parser, struct hotkey *hotkey)
+{
+    struct token key = parser_previous(parser);
+    for (int i = 0; i < array_count(literal_mousebutton_str); ++i) {
+        if (token_equals(key, literal_mousebutton_str[i])) {
+            //handle_implicit_literal_flags(hotkey, i);
+            hotkey->key = literal_mousebutton_value[i];
+            debug("\tbutton: '%.*s' (0x%02x)\n", key.length, key.text, hotkey->key);
             break;
         }
     }
@@ -266,6 +292,7 @@ parse_hotkey(struct parser *parser)
 {
     struct hotkey *hotkey = malloc(sizeof(struct hotkey));
     memset(hotkey, 0, sizeof(struct hotkey));
+    hotkey->type = HKKeyBoard;
     bool found_modifier;
 
     debug("hotkey :: #%d {\n", parser->current_token.line);
@@ -306,6 +333,12 @@ parse_hotkey(struct parser *parser)
         hotkey->key = parse_key_hex(parser);
     } else if (parser_match(parser, Token_Literal)) {
         parse_key_literal(parser, hotkey);
+    } else if (parser_match(parser, Token_Mouse_Hex)) {
+        hotkey->type = HKMouse;
+        hotkey->key = parse_mouse_hex(parser);
+    } else if (parser_match(parser, Token_Mouse_Literal)) {
+        hotkey->type = HKMouse;
+        parse_mouse_literal(parser, hotkey);
     } else {
         parser_report_error(parser, parser_peek(parser), "expected key-literal\n");
         goto err;
@@ -477,6 +510,8 @@ bool parse_config(struct parser *parser)
             (parser_check(parser, Token_Modifier)) ||
             (parser_check(parser, Token_Literal)) ||
             (parser_check(parser, Token_Key_Hex)) ||
+            (parser_check(parser, Token_Mouse_Literal)) ||
+            (parser_check(parser, Token_Mouse_Hex)) ||
             (parser_check(parser, Token_Key))) {
             if ((hotkey = parse_hotkey(parser))) {
                 for (int i = 0; i < buf_len(hotkey->mode_list); ++i) {

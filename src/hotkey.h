@@ -68,8 +68,15 @@ struct mode
     struct table hotkey_map;
 };
 
+enum hotkey_type
+{
+    HKKeyBoard,
+    HKMouse
+};
+
 struct hotkey
 {
+    enum hotkey_type type;
     uint32_t flags;
     uint32_t key;
     char **process_name;

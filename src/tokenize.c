@@ -122,6 +122,11 @@ resolve_identifier_type(struct token token)
             return Token_Literal;
         }
     }
+        for (int i = 0; i < array_count(literal_mousebutton_str); ++i) {
+        if (token_equals(token, literal_mousebutton_str[i])) {
+            return Token_Mouse_Literal;
+        }
+    }
 
     return Token_Identifier;
 }
@@ -224,6 +229,11 @@ get_token(struct tokenizer *tokenizer)
             eat_hex(tokenizer);
             token.length = tokenizer->at - token.text;
             token.type = Token_Key_Hex;
+        } else if (c == 'm' && *tokenizer->at == 'b') {
+            advance(tokenizer);
+            eat_hex(tokenizer);
+            token.length = tokenizer->at - token.text;
+            token.type = Token_Mouse_Hex;
         } else if (isdigit(c)) {
             token.type = Token_Key;
         } else if (isalpha(c)) {

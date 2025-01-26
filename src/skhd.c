@@ -131,6 +131,8 @@ static CF_NOTIFICATION_CALLBACK(keymap_handler)
 
 static EVENT_TAP_CALLBACK(key_observer_handler)
 {
+    uint32_t keycode;
+    uint32_t flags;
     switch (type) {
     case kCGEventTapDisabledByTimeout:
     case kCGEventTapDisabledByUserInput: {
@@ -138,10 +140,22 @@ static EVENT_TAP_CALLBACK(key_observer_handler)
         struct event_tap *event_tap = (struct event_tap *) reference;
         CGEventTapEnable(event_tap->handle, 1);
     } break;
+    case kCGEventLeftMouseDown:
+    case kCGEventRightMouseDown:
+    case kCGEventOtherMouseDown:
+        keycode = CGEventGetIntegerValueField(event, kCGMouseEventButtonNumber);
+        flags = CGEventGetFlags(event);
+        printf("\rmoscode: 0x%.2X\tflags: ", keycode);
+        for (int i = 31; i >= 0; --i) {
+            printf("%c", (flags & (1 << i)) ? '1' : '0');
+        }
+        fflush(stdout);
+        return NULL;
     case kCGEventKeyDown:
     case kCGEventFlagsChanged: {
-        uint32_t flags = CGEventGetFlags(event);
-        uint32_t keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
+        keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
+        flags = CGEventGetFlags(event);
+
 
         if (keycode == kVK_ANSI_C && flags & 0x40000) {
             exit(0);
@@ -161,6 +175,7 @@ static EVENT_TAP_CALLBACK(key_observer_handler)
 
 static EVENT_TAP_CALLBACK(key_handler)
 {
+    struct hotkey eventkey = { .type = HKKeyBoard };
     switch (type) {
     case kCGEventTapDisabledByTimeout:
     case kCGEventTapDisabledByUserInput: {
@@ -168,12 +183,19 @@ static EVENT_TAP_CALLBACK(key_handler)
         struct event_tap *event_tap = (struct event_tap *) reference;
         CGEventTapEnable(event_tap->handle, 1);
     } break;
-    case kCGEventKeyDown: {
+    case kCGEventLeftMouseDown:
+    case kCGEventRightMouseDown:
+    case kCGEventOtherMouseDown:
+        eventkey.type = HKMouse;
+    case kCGEventKeyDown:
+    {
         if (table_find(&blacklst, carbon.process_name)) return event;
         if (!current_mode) return event;
 
         BEGIN_TIMED_BLOCK("handle_keypress");
-        struct hotkey eventkey = create_eventkey(event);
+        //struct hotkey eventkey = create_eventkey(event);
+        eventkey.key = CGEventGetIntegerValueField(event, (eventkey.type == HKMouse)? kCGMouseEventButtonNumber: kCGKeyboardEventKeycode);
+        eventkey.flags = cgevent_flags_to_hotkey_flags(CGEventGetFlags(event));
         bool result = find_and_exec_hotkey(&eventkey, &mode_map, &current_mode, &carbon);
         END_TIMED_BLOCK();
 
@@ -343,7 +365,10 @@ static bool parse_arguments(int argc, char **argv)
         } break;
         case 'o': {
             event_tap.mask = (1 << kCGEventKeyDown) |
-                             (1 << kCGEventFlagsChanged);
+                             (1 << kCGEventFlagsChanged) |
+                             (1 << kCGEventLeftMouseDown) |
+                             (1 << kCGEventRightMouseDown) |
+                             (1 << kCGEventOtherMouseDown);
             event_tap_begin(&event_tap, key_observer_handler);
             CFRunLoopRun();
         } break;
@@ -458,9 +483,11 @@ static GLOBAL_CONNECTION_CALLBACK(connection_handler)
 
 int main(int argc, char **argv)
 {
+    /*
     if (getuid() == 0 || geteuid() == 0) {
         require("skhd: running as root is not allowed! abort..\n");
     }
+    */
 
     if (parse_arguments(argc, argv)) {
         return EXIT_SUCCESS;
@@ -511,7 +538,11 @@ int main(int argc, char **argv)
     END_SCOPED_TIMED_BLOCK();
 
     BEGIN_SCOPED_TIMED_BLOCK("begin_eventtap");
-    event_tap.mask = (1 << kCGEventKeyDown) | (1 << NX_SYSDEFINED);
+    event_tap.mask = (1 << kCGEventKeyDown) |
+                     (1 << kCGEventLeftMouseDown) |
+                     (1 << kCGEventRightMouseDown) |
+                     (1 << kCGEventOtherMouseDown) |
+                     (1 << NX_SYSDEFINED);
     event_tap_begin(&event_tap, key_handler);
     END_SCOPED_TIMED_BLOCK();
     END_SCOPED_TIMED_BLOCK();
